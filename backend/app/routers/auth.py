@@ -25,12 +25,46 @@ class UserCreateRequest(BaseModel):
     role: str = "operation"
 
 
+class ChangeCredentialsRequest(BaseModel):
+    current_username: str
+    current_password: str
+    new_username: str = None
+    new_password: str = None
+
+
 @router.post("/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == payload.username).first()
     if not user or user.password_hash != hash_password(payload.password):
         raise HTTPException(401, "Kullanıcı adı veya şifre hatalı.")
     return {"username": user.username, "full_name": user.full_name, "role": user.role}
+
+
+@router.put("/change-credentials")
+def change_credentials(payload: ChangeCredentialsRequest, db: Session = Depends(get_db)):
+    """
+    Mevcut kullanıcı adı + şifreyi doğrulayıp, kullanıcı adı ve/veya
+    şifreyi değiştirir. Güvenlik amacıyla mevcut şifrenin doğru
+    girilmesi zorunludur (X-User-Role header'ına güvenilmez).
+    """
+    user = db.query(models.User).filter(models.User.username == payload.current_username).first()
+    if not user or user.password_hash != hash_password(payload.current_password):
+        raise HTTPException(401, "Mevcut kullanıcı adı veya şifre hatalı.")
+
+    if payload.new_username:
+        existing = db.query(models.User).filter(
+            models.User.username == payload.new_username,
+            models.User.id != user.id,
+        ).first()
+        if existing:
+            raise HTTPException(400, "Bu kullanıcı adı zaten kullanımda.")
+        user.username = payload.new_username
+
+    if payload.new_password:
+        user.password_hash = hash_password(payload.new_password)
+
+    db.commit()
+    return {"ok": True, "username": user.username}
 
 
 @router.post("/users")
