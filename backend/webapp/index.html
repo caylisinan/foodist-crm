@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foodist İstanbul — Hosted Buyer B2B CRM</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ================= GİRİŞ EKRANI ================= -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>Foodist İstanbul</h1>
+    <div class="subtitle">Hosted Buyer B2B CRM</div>
+    <form id="login-form">
+      <input type="text" id="login-username" placeholder="Kullanıcı Adı" autocomplete="username" required>
+      <input type="password" id="login-password" placeholder="Şifre" autocomplete="current-password" required>
+      <button type="submit">Giriş Yap</button>
+    </form>
+    <div class="login-hint">İlk kurulum: admin / admin123</div>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ================= UYGULAMA KABUĞU ================= -->
+<div id="app-shell">
+  <div id="sidebar">
+    <div class="brand">FOODIST <span>İSTANBUL</span></div>
+
+    <div class="event-picker">
+      <label>Etkinlik</label>
+      <select id="event-select"></select>
+      <button id="new-event-btn">+ Yeni Etkinlik</button>
+    </div>
+
+    <ul id="nav-list"></ul>
+
+    <div class="sidebar-footer">
+      <div class="role" id="sidebar-role">Rol: -</div>
+      <div class="role" id="sidebar-username">Kullanıcı: -</div>
+      <button id="logout-btn">Çıkış Yap</button>
+    </div>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<!-- ================= YENİ ETKİNLİK MODALI ================= -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal-box">
+    <h3>Yeni Etkinlik (Fuar Edisyonu)</h3>
+    <div id="event-modal-hint" style="display:none; color:var(--accent); font-size:12px; margin-bottom:14px;">
+      Sistemde henüz bir etkinlik yok. Lütfen ilk etkinliği oluşturun.
+    </div>
+    <div class="form-field" style="margin-bottom:12px;">
+      <label>Etkinlik Adı *</label>
+      <input type="text" id="new-event-name" placeholder="ör. Foodist İstanbul 2026">
+    </div>
+    <div class="form-field">
+      <label>Mekan</label>
+      <input type="text" id="new-event-venue" placeholder="ör. Tüyap">
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="event-modal-cancel">Vazgeç</button>
+      <button class="btn primary" id="event-modal-save">Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+import API from "../api.js";
+import { toast, escapeHtml, statusBadgeClass } from "../helpers.js";
+
+const STATUS_OPTIONS = [
+  "Tümü", "Önerildi", "Onay Bekliyor", "Buyer Onayladı", "Katılımcı Onayladı",
+  "Karşılıklı Onaylandı", "Toplantı Planlandı", "Tamamlandı", "No Show", "Reddedildi",
+];
+
+let matchesCache = [];
+
+export default {
+  key: "matching",
+  label: "🔗 Eşleştirme / Onaylar",
+  adminOnly: true,
+
+  async render(container, state) {
+    container.innerHTML = `
+      <div class="page-title">Akıllı Eşleştirme Motoru</div>
+      <div class="page-hint">Ağırlıkları ayarlayıp eşleştirmeleri oluşturun, ardından listeden onaylayın.</div>
+
+      <div class="card">
+        <h3>Eşleştirme Ayarları</h3>
+        <div class="form-grid">
+          <div class="form-field"><label>Ürün Uyumu Ağırlığı (%)</label><input id="w-product" type="number" value="50"></div>
+          <div class="form-field"><label>Sektör Uyumu Ağırlığı (%)</label><input id="w-sector" type="number" value="30"></div>
+          <div class="form-field"><label>Ülke Uyumu Ağırlığı (%)</label><input id="w-country" type="number" value="20"></div>
+          <div class="form-field"><label>Eşik Skor</label><input id="w-threshold" type="number" value="40"></div>
+          <div class="form-field full">
+            <label>Ülke Filtresi</label>
+            <select id="w-country-mode">
+              <option value="none">Filtre yok (uluslararası çeşitlilik ödüllenir)</option>
+              <option value="same_only">Aynı ülkeleri eşleştir</option>
+              <option value="exclude_same">Aynı ülkeleri hariç tut</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn primary" id="generate-btn">Eşleştirmeleri Oluştur</button>
+      </div>
+
+      <div class="filter-row">
+        <label>Durum Filtresi:</label>
+        <select id="status-filter">${STATUS_OPTIONS.map(s => `<option>${s}</option>`).join("")}</select>
+        <button class="btn ghost" id="refresh-btn">Yenile</button>
+        <button class="btn primary" id="approve-btn" style="margin-left:auto;">Seçilenleri Onayla (Mail Gönder)</button>
+      </div>
+
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th style="width:26px;"><input type="checkbox" id="select-all"></th>
+          <th>Buyer</th><th>Katılımcı</th><th>Ürün</th><th>Sektör</th><th>Toplam</th><th>Durum</th>
+        </tr></thead>
+        <tbody id="matches-tbody"></tbody>
+      </table></div>
+    `;
+
+    container.querySelector("#generate-btn").addEventListener("click", () => this.generate(container, state));
+    container.querySelector("#status-filter").addEventListener("change", () => this.refresh(container, state));
+    container.querySelector("#refresh-btn").addEventListener("click", () => this.refresh(container, state));
+    container.querySelector("#approve-btn").addEventListener("click", () => this.approveSelected(container, state));
+    container.querySelector("#select-all").addEventListener("change", (e) => {
+      container.querySelectorAll(".match-checkbox").forEach(cb => { cb.checked = e.target.checked; });
+    });
+
+    await this.refresh(container, state);
+  },
+
+  async generate(container, state) {
+    if (!state.eventId) { toast("Önce bir etkinlik seçin.", "error"); return; }
+
+    const payload = {
+      event_id: state.eventId,
+      weight_product: parseFloat(container.querySelector("#w-product").value) || 0,
+      weight_sector: parseFloat(container.querySelector("#w-sector").value) || 0,
+      weight_country: parseFloat(container.querySelector("#w-country").value) || 0,
+      country_mode: container.querySelector("#w-country-mode").value,
+      threshold: parseFloat(container.querySelector("#w-threshold").value) || 0,
+    };
+
+    let result;
+    try {
+      result = await API.generateMatches(payload);
+    } catch (e) {
+      toast("Hata: " + e.message, "error");
+      return;
+    }
+
+    alert(
+      `${result.created} yeni eşleşme oluşturuldu.\n` +
+      `Zaten var olan: ${result.skipped_existing_pairs}\n` +
+      `Eşik altında kalan: ${result.below_threshold}\n` +
+      `Ülke filtresiyle elenen: ${result.filtered_by_country_rule}`
+    );
+    await this.refresh(container, state);
+  },
+
+  async refresh(container, state) {
+    const tbody = container.querySelector("#matches-tbody");
+    if (!tbody || !state.eventId) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7">Önce bir etkinlik seçin.</td></tr>`;
+      return;
+    }
+    const status = container.querySelector("#status-filter").value;
+    try {
+      matchesCache = await API.listMatches(state.eventId, status);
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7">Hata: ${escapeHtml(e.message)}</td></tr>`;
+      return;
+    }
+
+    if (!matchesCache.length) {
+      tbody.innerHTML = `<tr><td colspan="7">Bu filtreyle eşleşme bulunamadı.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = matchesCache.map(m => `
+      <tr>
+        <td><input type="checkbox" class="match-checkbox" data-id="${m.id}"></td>
+        <td>${escapeHtml(m.buyer_name)}</td>
+        <td>${escapeHtml(m.participant_name)}</td>
+        <td>${m.product_score}</td>
+        <td>${m.sector_score}</td>
+        <td><strong>${m.total_score}</strong></td>
+        <td><span class="${statusBadgeClass(m.status)}">${escapeHtml(m.status)}</span></td>
+      </tr>
+    `).join("");
+  },
+
+  async approveSelected(container, state) {
+    const ids = [...container.querySelectorAll(".match-checkbox:checked")].map(cb => parseInt(cb.dataset.id));
+    if (!ids.length) { toast("Onaylamak için en az bir eşleşme seçin.", "error"); return; }
+
+    let result;
+    try {
+      result = await API.approveMatches(ids);
+    } catch (e) {
+      toast("Hata: " + e.message, "error");
+      return;
+    }
+
+    const lines = result.results.map(r => {
+      if (!r.ok) return `Eşleşme ${r.match_id}: ${r.error}`;
+      const b = r.buyer_mail_sent ? "gönderildi" : `BAŞARISIZ (${r.buyer_mail_error})`;
+      const p = r.participant_mail_sent ? "gönderildi" : `BAŞARISIZ (${r.participant_mail_error})`;
+      return `Eşleşme ${r.match_id} — Buyer maili: ${b} | Katılımcı maili: ${p}`;
+    });
+    alert(lines.join("\n"));
+    await this.refresh(container, state);
+  },
+};
