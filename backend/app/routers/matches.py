@@ -75,6 +75,47 @@ def generate_matches(payload: schemas.MatchGenerateRequest, db: Session = Depend
     }
 
 
+@router.post("/matches/manual", dependencies=[Depends(require_admin)])
+def create_manual_match(payload: schemas.ManualMatchRequest, db: Session = Depends(get_db)):
+    """
+    Admin'in kendi seçtiği bir buyer + katılımcı çiftini, eşleştirme
+    motorunu hiç çalıştırmadan doğrudan eşleşme listesine ekler.
+    Skor bilgisi referans için hesaplanır ama filtre/eşik uygulanmaz.
+    """
+    buyer = db.query(models.Buyer).get(payload.buyer_id)
+    participant = db.query(models.Participant).get(payload.participant_id)
+    if not buyer or not participant:
+        raise HTTPException(404, "Buyer veya katılımcı bulunamadı.")
+    if buyer.event_id != participant.event_id:
+        raise HTTPException(400, "Buyer ve katılımcı aynı etkinliğe ait olmalıdır.")
+
+    existing = db.query(models.Match).filter(
+        models.Match.buyer_id == buyer.id,
+        models.Match.participant_id == participant.id,
+    ).first()
+    if existing:
+        raise HTTPException(400, "Bu buyer ve katılımcı için zaten bir eşleşme mevcut.")
+
+    result = matching.compute_match(buyer, participant, 50, 30, 20, "none") or {
+        "product_score": 0, "sector_score": 0, "country_score": 0, "total_score": 0,
+    }
+
+    match = models.Match(
+        event_id=buyer.event_id,
+        buyer_id=buyer.id,
+        participant_id=participant.id,
+        product_score=result["product_score"],
+        sector_score=result["sector_score"],
+        country_score=result["country_score"],
+        total_score=result["total_score"],
+        status="Önerildi",
+    )
+    db.add(match)
+    db.commit()
+    db.refresh(match)
+    return {"ok": True, "match_id": match.id}
+
+
 @router.get("/matches", response_model=List[schemas.MatchOut])
 def list_matches(
     event_id: int = Query(...),
