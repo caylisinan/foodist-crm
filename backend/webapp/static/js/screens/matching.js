@@ -59,6 +59,7 @@ export default {
         <label>Durum Filtresi:</label>
         <select id="status-filter">${STATUS_OPTIONS.map(s => `<option>${s}</option>`).join("")}</select>
         <button class="btn ghost" id="refresh-btn">Yenile</button>
+        <button class="btn ghost" id="direct-approve-btn">Seçilenleri Direkt Onayla (Mailsiz)</button>
         <button class="btn primary" id="approve-btn" style="margin-left:auto;">Seçilenleri Onayla (Mail Gönder)</button>
       </div>
 
@@ -76,6 +77,7 @@ export default {
     container.querySelector("#status-filter").addEventListener("change", () => this.refresh(container, state));
     container.querySelector("#refresh-btn").addEventListener("click", () => this.refresh(container, state));
     container.querySelector("#approve-btn").addEventListener("click", () => this.approveSelected(container, state));
+    container.querySelector("#direct-approve-btn").addEventListener("click", () => this.directApproveSelected(container, state));
     container.querySelector("#select-all").addEventListener("change", (e) => {
       container.querySelectorAll(".match-checkbox").forEach(cb => { cb.checked = e.target.checked; });
     });
@@ -185,6 +187,33 @@ export default {
         <td><span class="${statusBadgeClass(m.status)}">${escapeHtml(m.status)}</span></td>
       </tr>
     `).join("");
+  },
+
+  async directApproveSelected(container, state) {
+    const ids = [...container.querySelectorAll(".match-checkbox:checked")].map(cb => parseInt(cb.dataset.id));
+    if (!ids.length) { toast("Onaylamak için en az bir eşleşme seçin.", "error"); return; }
+
+    if (!confirm(
+      `${ids.length} eşleşme, mail onayı beklenmeden doğrudan "Karşılıklı Onaylandı" ` +
+      `durumuna alınacak ve Takvim ekranında toplantı planlanabilir hale gelecek. Onaylıyor musunuz?`
+    )) return;
+
+    let okCount = 0;
+    const errors = [];
+    for (const id of ids) {
+      try {
+        await API.updateMatchStatus(id, "Karşılıklı Onaylandı");
+        okCount++;
+      } catch (e) {
+        errors.push(`Eşleşme ${id}: ${e.message}`);
+      }
+    }
+
+    toast(`${okCount} eşleşme direkt onaylandı.` + (errors.length ? ` ${errors.length} hata oluştu.` : ""),
+          errors.length ? "error" : "success");
+    if (errors.length) alert(errors.join("\n"));
+
+    await this.refresh(container, state);
   },
 
   async approveSelected(container, state) {
