@@ -37,6 +37,24 @@ export default {
         <button class="btn primary" id="generate-btn">Eşleştirmeleri Oluştur</button>
       </div>
 
+      <div class="card">
+        <h3>Manuel Eşleştirme</h3>
+        <div class="page-hint" style="margin-bottom:14px;">
+          Otomatik motoru beklemeden, belirli bir buyer ile belirli bir firmayı doğrudan eşleştirin.
+        </div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Hosted Buyer</label>
+            <select id="manual-buyer-select"></select>
+          </div>
+          <div class="form-field">
+            <label>Katılımcı Firma</label>
+            <select id="manual-participant-select"></select>
+          </div>
+        </div>
+        <button class="btn primary" id="manual-match-btn">Eşleştir</button>
+      </div>
+
       <div class="filter-row">
         <label>Durum Filtresi:</label>
         <select id="status-filter">${STATUS_OPTIONS.map(s => `<option>${s}</option>`).join("")}</select>
@@ -54,6 +72,7 @@ export default {
     `;
 
     container.querySelector("#generate-btn").addEventListener("click", () => this.generate(container, state));
+    container.querySelector("#manual-match-btn").addEventListener("click", () => this.createManualMatch(container, state));
     container.querySelector("#status-filter").addEventListener("change", () => this.refresh(container, state));
     container.querySelector("#refresh-btn").addEventListener("click", () => this.refresh(container, state));
     container.querySelector("#approve-btn").addEventListener("click", () => this.approveSelected(container, state));
@@ -61,6 +80,48 @@ export default {
       container.querySelectorAll(".match-checkbox").forEach(cb => { cb.checked = e.target.checked; });
     });
 
+    await this.loadManualOptions(container, state);
+    await this.refresh(container, state);
+  },
+
+  async loadManualOptions(container, state) {
+    const buyerSelect = container.querySelector("#manual-buyer-select");
+    const participantSelect = container.querySelector("#manual-participant-select");
+    if (!state.eventId) {
+      buyerSelect.innerHTML = `<option value="">(Önce etkinlik seçin)</option>`;
+      participantSelect.innerHTML = `<option value="">(Önce etkinlik seçin)</option>`;
+      return;
+    }
+    try {
+      const [buyers, participants] = await Promise.all([
+        API.listBuyers(state.eventId),
+        API.listParticipants(state.eventId),
+      ]);
+      buyerSelect.innerHTML = buyers.length
+        ? buyers.map(b => `<option value="${b.id}">${escapeHtml(b.company_name)} (${escapeHtml(b.country) || "-"})</option>`).join("")
+        : `<option value="">(Buyer yok)</option>`;
+      participantSelect.innerHTML = participants.length
+        ? participants.map(p => `<option value="${p.id}">${escapeHtml(p.company_name)} (${escapeHtml(p.country) || "-"})</option>`).join("")
+        : `<option value="">(Katılımcı yok)</option>`;
+    } catch (e) {
+      toast("Buyer/katılımcı listesi alınamadı: " + e.message, "error");
+    }
+  },
+
+  async createManualMatch(container, state) {
+    const buyerSelect = container.querySelector("#manual-buyer-select");
+    const participantSelect = container.querySelector("#manual-participant-select");
+    if (!buyerSelect.value || !participantSelect.value) {
+      toast("Lütfen bir buyer ve bir katılımcı seçin.", "error");
+      return;
+    }
+    try {
+      await API.createManualMatch(parseInt(buyerSelect.value), parseInt(participantSelect.value));
+      toast("Eşleşme oluşturuldu.", "success");
+    } catch (e) {
+      toast("Eşleştirilemedi: " + e.message, "error");
+      return;
+    }
     await this.refresh(container, state);
   },
 
@@ -94,6 +155,7 @@ export default {
   },
 
   async refresh(container, state) {
+    await this.loadManualOptions(container, state);
     const tbody = container.querySelector("#matches-tbody");
     if (!tbody || !state.eventId) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="7">Önce bir etkinlik seçin.</td></tr>`;
