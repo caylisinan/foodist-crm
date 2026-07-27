@@ -67,6 +67,11 @@ class MatchGenerateRequest(BaseModel):
     send_admin_preview: bool = False
 
 
+class ManualMatchRequest(BaseModel):
+    buyer_id: int
+    participant_id: int
+
+
 class MatchOut(BaseModel):
     id: int
     event_id: int
