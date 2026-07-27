@@ -135,6 +135,13 @@ const API = {
     });
     return this._handle(res);
   },
+  async createManualMatch(buyerId, participantId) {
+    const res = await fetch("/matches/manual", {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ buyer_id: buyerId, participant_id: participantId }),
+    });
+    return this._handle(res);
+  },
   async listMatches(eventId, status) {
     let url = `/matches?event_id=${eventId}`;
     if (status && status !== "Tümü") url += `&status=${encodeURIComponent(status)}`;
