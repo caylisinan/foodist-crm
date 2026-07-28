@@ -94,6 +94,7 @@ class MatchStatusUpdate(BaseModel):
 
 class MatchApproveRequest(BaseModel):
     match_ids: List[int]
+    notify: str = "both"  # both | buyer | participant
 
 
 # ---------- Meeting ----------
@@ -102,6 +103,7 @@ class MeetingCreate(BaseModel):
     meeting_date: date
     start_time: str
     stand_no: Optional[str] = None
+    send_email: bool = True
 
 
 class MeetingOut(BaseModel):
