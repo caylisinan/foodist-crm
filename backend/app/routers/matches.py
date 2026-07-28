@@ -164,27 +164,40 @@ def admin_approve_matches(payload: schemas.MatchApproveRequest, db: Session = De
         match.participant_token = match.participant_token or str(uuid.uuid4())
         match.status = "Onay Bekliyor"
 
-        buyer_ok = participant_ok = True
-        buyer_err = participant_err = None
+        send_to_buyer = payload.notify in ("both", "buyer")
+        send_to_participant = payload.notify in ("both", "participant")
 
-        if buyer and buyer.contact_email:
+        buyer_ok = participant_ok = None
+        buyer_err = participant_err = None
+        buyer_skipped = not send_to_buyer
+        participant_skipped = not send_to_participant
+
+        if send_to_buyer and buyer and buyer.contact_email:
             subject, body = email_service.build_buyer_approval_email(buyer, participant, base_url, match.buyer_token)
             buyer_ok, buyer_err = email_service.send_email(db, buyer.contact_email, subject, body)
             db.add(models.EmailLog(match_id=match.id, recipient_type="buyer",
                                     recipient_email=buyer.contact_email, subject=subject,
                                     status="sent" if buyer_ok else "failed", error=buyer_err))
-        if participant and participant.contact_email:
+        elif send_to_buyer:
+            buyer_ok = False
+            buyer_err = "Buyer için e-posta adresi kayıtlı değil."
+
+        if send_to_participant and participant and participant.contact_email:
             subject, body = email_service.build_participant_approval_email(buyer, participant, base_url, match.participant_token)
             participant_ok, participant_err = email_service.send_email(db, participant.contact_email, subject, body)
             db.add(models.EmailLog(match_id=match.id, recipient_type="participant",
                                     recipient_email=participant.contact_email, subject=subject,
                                     status="sent" if participant_ok else "failed", error=participant_err))
+        elif send_to_participant:
+            participant_ok = False
+            participant_err = "Katılımcı için e-posta adresi kayıtlı değil."
 
         db.commit()
         results.append({
             "match_id": match_id, "ok": True,
-            "buyer_mail_sent": buyer_ok, "buyer_mail_error": buyer_err,
+            "buyer_mail_sent": buyer_ok, "buyer_mail_error": buyer_err, "buyer_mail_skipped": buyer_skipped,
             "participant_mail_sent": participant_ok, "participant_mail_error": participant_err,
+            "participant_mail_skipped": participant_skipped,
         })
 
     return {"results": results}
