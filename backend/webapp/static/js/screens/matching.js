@@ -59,8 +59,13 @@ export default {
         <label>Durum Filtresi:</label>
         <select id="status-filter">${STATUS_OPTIONS.map(s => `<option>${s}</option>`).join("")}</select>
         <button class="btn ghost" id="refresh-btn">Yenile</button>
+      </div>
+
+      <div class="filter-row">
+        <button class="btn primary" id="approve-both-btn">Seçilenleri Onayla (Mail Gönder)</button>
         <button class="btn ghost" id="direct-approve-btn">Seçilenleri Direkt Onayla (Mailsiz)</button>
-        <button class="btn primary" id="approve-btn" style="margin-left:auto;">Seçilenleri Onayla (Mail Gönder)</button>
+        <button class="btn ghost" id="approve-buyer-only-btn">Onay için sadece Hosted Buyer'a mail gönder</button>
+        <button class="btn ghost" id="approve-participant-only-btn">Onay için sadece Katılımcıya mail gönder</button>
       </div>
 
       <div class="table-wrap"><table>
@@ -76,8 +81,10 @@ export default {
     container.querySelector("#manual-match-btn").addEventListener("click", () => this.createManualMatch(container, state));
     container.querySelector("#status-filter").addEventListener("change", () => this.refresh(container, state));
     container.querySelector("#refresh-btn").addEventListener("click", () => this.refresh(container, state));
-    container.querySelector("#approve-btn").addEventListener("click", () => this.approveSelected(container, state));
+    container.querySelector("#approve-both-btn").addEventListener("click", () => this.approveSelected(container, state, "both"));
     container.querySelector("#direct-approve-btn").addEventListener("click", () => this.directApproveSelected(container, state));
+    container.querySelector("#approve-buyer-only-btn").addEventListener("click", () => this.approveSelected(container, state, "buyer"));
+    container.querySelector("#approve-participant-only-btn").addEventListener("click", () => this.approveSelected(container, state, "participant"));
     container.querySelector("#select-all").addEventListener("change", (e) => {
       container.querySelectorAll(".match-checkbox").forEach(cb => { cb.checked = e.target.checked; });
     });
@@ -216,22 +223,28 @@ export default {
     await this.refresh(container, state);
   },
 
-  async approveSelected(container, state) {
+  async approveSelected(container, state, notify = "both") {
     const ids = [...container.querySelectorAll(".match-checkbox:checked")].map(cb => parseInt(cb.dataset.id));
     if (!ids.length) { toast("Onaylamak için en az bir eşleşme seçin.", "error"); return; }
 
     let result;
     try {
-      result = await API.approveMatches(ids);
+      result = await API.approveMatches(ids, notify);
     } catch (e) {
       toast("Hata: " + e.message, "error");
       return;
     }
 
+    const describe = (skipped, sent, err) => {
+      if (skipped) return "gönderilmedi (bu seçenekte hedeflenmedi)";
+      if (sent) return "gönderildi";
+      return `BAŞARISIZ (${err})`;
+    };
+
     const lines = result.results.map(r => {
       if (!r.ok) return `Eşleşme ${r.match_id}: ${r.error}`;
-      const b = r.buyer_mail_sent ? "gönderildi" : `BAŞARISIZ (${r.buyer_mail_error})`;
-      const p = r.participant_mail_sent ? "gönderildi" : `BAŞARISIZ (${r.participant_mail_error})`;
+      const b = describe(r.buyer_mail_skipped, r.buyer_mail_sent, r.buyer_mail_error);
+      const p = describe(r.participant_mail_skipped, r.participant_mail_sent, r.participant_mail_error);
       return `Eşleşme ${r.match_id} — Buyer maili: ${b} | Katılımcı maili: ${p}`;
     });
     alert(lines.join("\n"));
