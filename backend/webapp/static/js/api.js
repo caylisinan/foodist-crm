@@ -147,10 +147,10 @@ const API = {
     if (status && status !== "Tümü") url += `&status=${encodeURIComponent(status)}`;
     return this._handle(await fetch(url, { headers: authHeaders() }));
   },
-  async approveMatches(matchIds) {
+  async approveMatches(matchIds, notify = "both") {
     const res = await fetch("/matches/approve", {
       method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ match_ids: matchIds }),
+      body: JSON.stringify({ match_ids: matchIds, notify }),
     });
     return this._handle(res);
   },
@@ -171,7 +171,7 @@ const API = {
   async scheduleMeeting(payload) {
     const res = await fetch("/meetings/schedule", {
       method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ send_email: true, ...payload }),
     });
     return this._handle(res);
   },
