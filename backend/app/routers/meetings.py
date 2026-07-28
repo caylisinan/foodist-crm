@@ -102,24 +102,29 @@ def schedule_meeting(payload: schemas.MeetingCreate, db: Session = Depends(get_d
     db.commit()
     db.refresh(meeting)
 
-    # Bilgilendirme maili (tarih/saat/stand no)
-    if buyer and buyer.contact_email:
-        subject, body = email_service.build_meeting_confirmation_email(
-            buyer.contact_name or buyer.company_name, participant.company_name, meeting, meeting.stand_no)
-        ok, err = email_service.send_email(db, buyer.contact_email, subject, body)
-        db.add(models.EmailLog(match_id=match.id, meeting_id=meeting.id, recipient_type="buyer",
-                                recipient_email=buyer.contact_email, subject=subject,
-                                status="sent" if ok else "failed", error=err))
-    if participant and participant.contact_email:
-        subject, body = email_service.build_meeting_confirmation_email(
-            participant.contact_name or participant.company_name, buyer.company_name, meeting, meeting.stand_no)
-        ok, err = email_service.send_email(db, participant.contact_email, subject, body)
-        db.add(models.EmailLog(match_id=match.id, meeting_id=meeting.id, recipient_type="participant",
-                                recipient_email=participant.contact_email, subject=subject,
-                                status="sent" if ok else "failed", error=err))
-    db.commit()
+    mail_result = {"buyer_mail_sent": None, "participant_mail_sent": None}
 
-    return {"ok": True, "meeting_id": meeting.id}
+    # Bilgilendirme maili (tarih/saat/stand no) — sadece send_email=True ise gönderilir
+    if payload.send_email:
+        if buyer and buyer.contact_email:
+            subject, body = email_service.build_meeting_confirmation_email(
+                buyer.contact_name or buyer.company_name, participant.company_name, meeting, meeting.stand_no)
+            ok, err = email_service.send_email(db, buyer.contact_email, subject, body)
+            db.add(models.EmailLog(match_id=match.id, meeting_id=meeting.id, recipient_type="buyer",
+                                    recipient_email=buyer.contact_email, subject=subject,
+                                    status="sent" if ok else "failed", error=err))
+            mail_result["buyer_mail_sent"] = ok
+        if participant and participant.contact_email:
+            subject, body = email_service.build_meeting_confirmation_email(
+                participant.contact_name or participant.company_name, buyer.company_name, meeting, meeting.stand_no)
+            ok, err = email_service.send_email(db, participant.contact_email, subject, body)
+            db.add(models.EmailLog(match_id=match.id, meeting_id=meeting.id, recipient_type="participant",
+                                    recipient_email=participant.contact_email, subject=subject,
+                                    status="sent" if ok else "failed", error=err))
+            mail_result["participant_mail_sent"] = ok
+        db.commit()
+
+    return {"ok": True, "meeting_id": meeting.id, **mail_result}
 
 
 @router.put("/{meeting_id}/attendance")
