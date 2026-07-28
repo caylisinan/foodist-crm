@@ -28,6 +28,7 @@ export default {
           <div class="form-field"><label>Stand No (opsiyonel override)</label><input id="meeting-stand"></div>
         </div>
         <button class="btn primary" id="schedule-btn">Toplantıyı Planla ve Mail Gönder</button>
+        <button class="btn ghost" id="schedule-no-mail-btn">Toplantıyı Planla (Mailsiz)</button>
       </div>
 
       <div class="filter-row">
@@ -44,7 +45,8 @@ export default {
       </table></div>
     `;
 
-    container.querySelector("#schedule-btn").addEventListener("click", () => this.schedule(container, state));
+    container.querySelector("#schedule-btn").addEventListener("click", () => this.schedule(container, state, true));
+    container.querySelector("#schedule-no-mail-btn").addEventListener("click", () => this.schedule(container, state, false));
     container.querySelector("#view-date").addEventListener("change", () => this.refreshMeetings(container, state));
     container.querySelector("#refresh-btn").addEventListener("click", () => this.refresh(container, state));
 
@@ -127,7 +129,7 @@ export default {
     });
   },
 
-  async schedule(container, state) {
+  async schedule(container, state, sendEmail = true) {
     const select = container.querySelector("#eligible-select");
     if (!select.value) { toast("Önce 'Eşleştirme' ekranından eşleşmeleri karşılıklı onaylatmanız gerekir.", "error"); return; }
 
@@ -139,6 +141,7 @@ export default {
       meeting_date: container.querySelector("#meeting-date").value,
       start_time: time,
       stand_no: container.querySelector("#meeting-stand").value.trim() || null,
+      send_email: sendEmail,
     };
 
     try {
@@ -148,7 +151,9 @@ export default {
       return;
     }
 
-    toast("Toplantı planlandı ve taraflara bilgilendirme e-postası gönderildi.", "success");
+    toast(sendEmail
+      ? "Toplantı planlandı ve taraflara bilgilendirme e-postası gönderildi."
+      : "Toplantı planlandı (mail gönderilmedi).", "success");
     container.querySelector("#view-date").value = payload.meeting_date;
     await this.refresh(container, state);
   },
